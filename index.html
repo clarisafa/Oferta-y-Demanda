@@ -381,6 +381,8 @@ var CHIP_OTROS = 'Otros';
     <span id="sync-text">Sin conexión con Google Sheets</span>
   </div>
 
+  <div id="pendientes-box" style="margin-bottom:20px;"></div>
+
   <div class="map-tabs">
     <button class="map-tab active" onclick="switchTab('tabla')">Lista por participante</button>
     <button class="map-tab" onclick="switchTab('burbujas')">Temas en común</button>
@@ -495,6 +497,17 @@ function confirmarNuevaOrg(){
   toggleAddOrg(false);
   renderGrilla();
   showToast('✓ '+nombre+' agregada — ya podés seleccionarla');
+
+  // Escribir al sheet de inmediato (sin ofertas/demandas todavía) para que
+  // sea visible para cualquier otra persona que entre desde otro dispositivo
+  if(SCRIPT_URL && SCRIPT_URL !== 'TU_URL_AQUI'){
+    fetch(SCRIPT_URL, {
+      method: 'POST',
+      mode: 'no-cors',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action:'crear', id:id, nombre:nombre, offers:'', demands:'' })
+    }).catch(function(){ /* si falla, igual queda disponible localmente */ });
+  }
 }
 
 /* ══════════════════════════════════════════
@@ -775,9 +788,31 @@ function switchTab(t){
 function renderMapa(){
   var cargados = PS.filter(function(p){ return estado.cargado[p.id]; });
   document.getElementById('map-count').textContent = cargados.length + ' / ' + PS.length;
+  renderPendientes();
   renderTabla(cargados);
   if(tabActual === 'burbujas') dibujarBurbujas();
   if(tabActual === 'red') dibujarRed();
+}
+
+function renderPendientes(){
+  var box = document.getElementById('pendientes-box');
+  // Pendientes = en PS pero sin offers ni demands cargados
+  var pendientes = PS.filter(function(p){
+    var d = estado.cargado[p.id];
+    return !d || (!d.offers.length && !d.demands.length);
+  });
+  if(!pendientes.length){ box.innerHTML = ''; return; }
+
+  var h = '<div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:var(--light);margin-bottom:8px;">Sin completar todavía ('+pendientes.length+')</div>';
+  h += '<div style="display:flex;flex-wrap:wrap;gap:8px;">';
+  pendientes.forEach(function(p){
+    h += '<div style="display:inline-flex;align-items:center;gap:8px;padding:6px 12px;background:#fff;border:1.5px solid var(--border);border-radius:20px;font-size:12px;">'+
+         '<span style="font-weight:600;">'+esc(p.name)+'</span>'+
+         '<button onclick="eliminarOrganizacion(\''+p.id+'\',\''+esc(p.name)+'\')" style="border:none;background:none;color:#c0392b;cursor:pointer;font-size:11px;opacity:0.6;font-family:Barlow,sans-serif;">✕</button>'+
+         '</div>';
+  });
+  h += '</div>';
+  box.innerHTML = h;
 }
 
 /* ── TAB 1: TABLA ── */
@@ -797,7 +832,20 @@ function buildMapCol(cargados, key, label, hClass){
     if(!items || !items.length) return;
     any = true;
     var e = document.createElement('div'); e.className = 'map-entry';
-    var n = document.createElement('div'); n.className = 'map-ename'; n.textContent = p.name; e.appendChild(n);
+    var n = document.createElement('div'); n.className = 'map-ename';
+    n.style.display = 'flex'; n.style.justifyContent = 'space-between'; n.style.alignItems = 'center';
+    var nSpan = document.createElement('span'); nSpan.textContent = p.name;
+    n.appendChild(nSpan);
+    if(key === 'offers'){
+      var delBtn = document.createElement('button');
+      delBtn.textContent = '✕ Eliminar';
+      delBtn.style.cssText = 'font-size:10px;border:none;background:none;color:#c0392b;cursor:pointer;opacity:0.6;font-family:Barlow,sans-serif;';
+      delBtn.onmouseover = function(){ this.style.opacity = '1'; };
+      delBtn.onmouseout = function(){ this.style.opacity = '0.6'; };
+      delBtn.onclick = function(){ eliminarOrganizacion(p.id, p.name); };
+      n.appendChild(delBtn);
+    }
+    e.appendChild(n);
     var ch = document.createElement('div'); ch.className = 'map-chips';
     items.forEach(function(item){
       var c = document.createElement('span'); c.className = 'map-chip';
@@ -807,6 +855,27 @@ function buildMapCol(cargados, key, label, hClass){
   });
   if(!any){ var m = document.createElement('div'); m.className = 'empty-msg'; m.textContent = 'Sin datos aún'; col.appendChild(m); }
   return col;
+}
+
+function eliminarOrganizacion(id, nombre){
+  if(!confirm('¿Eliminar definitivamente a "'+nombre+'"? Esta acción no se puede deshacer.')) return;
+
+  // Sacar de la lista local y del estado
+  PS = PS.filter(function(p){ return p.id !== id; });
+  delete estado.cargado[id];
+  if(estado.seleccionado === id) estado.seleccionado = null;
+  renderMapa();
+  renderGrilla();
+  showToast('Eliminada · '+nombre);
+
+  if(SCRIPT_URL && SCRIPT_URL !== 'TU_URL_AQUI'){
+    fetch(SCRIPT_URL, {
+      method: 'POST',
+      mode: 'no-cors',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action:'eliminar', id:id })
+    }).catch(function(){ /* si falla la conexión, queda eliminada localmente igual */ });
+  }
 }
 
 /* ── TAB 2: BURBUJAS ── */
