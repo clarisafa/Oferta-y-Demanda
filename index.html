@@ -1,35 +1,837 @@
-function doPost(e) {
-  var data = JSON.parse(e.postData.contents);
-  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Datos') 
-              || SpreadsheetApp.getActiveSpreadsheet().insertSheet('Datos');
-  
-  // Buscar si ya existe esa organización
-  var rows = sheet.getDataRange().getValues();
-  var found = -1;
-  for(var i=1; i<rows.length; i++){
-    if(rows[i][0] === data.id){ found = i+1; break; }
-  }
-  
-  var row = [data.id, data.nombre, data.offers, data.demands, new Date()];
-  if(found > 0){ sheet.getRange(found, 1, 1, 5).setValues([row]); }
-  else { sheet.appendRow(row); }
-  
-  return ContentService.createTextOutput('ok');
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Oferta & Demanda — Ciudades Emprendedoras RIL</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Barlow:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --cream:#f3f1e7; --purple:#a62bff; --yellow:#fdf24b;
+  --blue:#265cb6; --teal:#1d9e75; --green:#35d280;
+  --pink:#e5007e; --dark:#1a1a1a; --mid:#555; --light:#999;
+  --border:rgba(0,0,0,0.1);
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Barlow',sans-serif;background:var(--cream);color:var(--dark);min-height:100vh;}
+
+/* HEADER */
+header{background:var(--cream);border-bottom:1.5px solid rgba(0,0,0,0.08);padding:14px 36px;display:flex;align-items:center;justify-content:space-between;gap:16px;}
+.logo img{height:44px;display:block;}
+.header-center{font-size:12px;color:var(--mid);font-weight:500;letter-spacing:0.04em;text-transform:uppercase;}
+.prog-bar{display:flex;gap:5px;}
+.prog-dot{width:9px;height:9px;border-radius:50%;background:rgba(0,0,0,0.12);transition:background 0.3s;}
+.prog-dot.done{background:var(--purple);}
+
+main{max-width:880px;margin:0 auto;padding:36px 24px 60px;}
+.accent{height:4px;border-radius:2px;background:linear-gradient(90deg,var(--purple),var(--blue),var(--teal));margin-bottom:28px;}
+
+.step{display:none;} .step.active{display:block;}
+h1{font-family:'Bebas Neue',Impact,sans-serif;font-size:42px;letter-spacing:0.03em;line-height:1;margin-bottom:6px;}
+.sub{font-size:15px;color:var(--mid);margin-bottom:28px;}
+
+/* PANTALLA INICIO */
+.inicio-wrap{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:70vh;text-align:center;gap:20px;}
+.inicio-logo{height:70px;margin-bottom:8px;}
+.inicio-title{font-family:'Bebas Neue',Impact,sans-serif;font-size:36px;letter-spacing:0.04em;color:var(--dark);}
+.inicio-sub{font-size:15px;color:var(--mid);max-width:400px;}
+.inicio-btns{display:flex;gap:14px;flex-wrap:wrap;justify-content:center;margin-top:8px;}
+
+/* ADMIN LOGIN */
+.login-box{max-width:360px;margin:80px auto 0;background:#fff;border:1.5px solid var(--border);border-radius:16px;padding:36px 32px;text-align:center;}
+.login-box h2{font-family:'Bebas Neue',Impact,sans-serif;font-size:28px;margin-bottom:6px;}
+.login-box p{font-size:14px;color:var(--mid);margin-bottom:24px;}
+.login-inp{width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:10px;font-family:'Barlow',sans-serif;font-size:15px;outline:none;text-align:center;letter-spacing:0.1em;}
+.login-inp:focus{border-color:var(--purple);}
+.login-err{font-size:13px;color:#c0392b;margin-top:8px;min-height:18px;}
+
+/* GRILLA PARTICIPANTES */
+.p-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(165px,1fr));gap:11px;margin-bottom:28px;}
+.p-card{padding:15px;background:#fff;border:1.5px solid var(--border);border-radius:14px;cursor:pointer;transition:all 0.15s;position:relative;}
+.p-card:hover{border-color:var(--purple);transform:translateY(-1px);}
+.p-card.sel{border-color:var(--purple);background:#f9f2ff;}
+.p-card.done::after{content:'✓';position:absolute;top:10px;right:12px;font-size:13px;color:#1a6b3c;font-weight:700;}
+.p-av{width:38px;height:38px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;margin-bottom:8px;}
+.p-name{font-size:13px;font-weight:600;}
+.p-role{font-size:11px;color:var(--light);margin-top:2px;}
+
+/* FORMULARIO CON CHIPS SELECCIONABLES */
+.form-who{display:flex;align-items:center;gap:14px;padding:14px 18px;background:#fff;border:1.5px solid var(--border);border-radius:14px;margin-bottom:24px;}
+.f-av{width:44px;height:44px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:700;flex-shrink:0;}
+.f-name{font-size:16px;font-weight:600;}
+.f-role{font-size:12px;color:var(--light);}
+
+.field-section{margin-bottom:28px;}
+.field-lbl{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:12px;display:flex;align-items:center;gap:8px;color:var(--dark);}
+.lbl-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0;}
+.field-hint{font-size:12px;color:var(--light);margin-bottom:12px;margin-top:-8px;}
+
+/* CHIPS SELECCIONABLES */
+.chip-grid{display:flex;flex-wrap:wrap;gap:8px;}
+.sel-chip{
+  display:inline-flex;align-items:center;gap:6px;
+  padding:8px 14px;border-radius:24px;
+  font-size:13px;font-weight:500;cursor:pointer;
+  border:1.5px solid var(--border);background:#fff;
+  color:var(--mid);transition:all 0.15s;user-select:none;
+}
+.sel-chip:hover{border-color:currentColor;opacity:0.85;}
+.sel-chip.offer-chip{border-color:#b2e8cb;color:#1a6b3c;}
+.sel-chip.offer-chip.active{background:#e8f9ef;border-color:#35d280;color:#1a6b3c;font-weight:600;}
+.sel-chip.demand-chip{border-color:#f4b8d4;color:#8b0040;}
+.sel-chip.demand-chip.active{background:#fde8f0;border-color:#e5007e;color:#8b0040;font-weight:600;}
+
+.sel-chip .chip-check{
+  width:16px;height:16px;border-radius:50%;border:1.5px solid currentColor;
+  display:flex;align-items:center;justify-content:center;font-size:10px;
+  flex-shrink:0;transition:all 0.15s;
+}
+.sel-chip.active .chip-check{background:currentColor;}
+.sel-chip.active .chip-check::after{content:'✓';color:#fff;font-size:9px;font-weight:700;}
+
+.selected-count{font-size:12px;color:var(--mid);margin-top:10px;}
+.selected-count span{font-weight:700;color:var(--dark);}
+
+/* BOTONES */
+.btn-row{display:flex;gap:10px;flex-wrap:wrap;margin-top:8px;}
+.btn{padding:11px 22px;border-radius:10px;font-family:'Barlow',sans-serif;font-size:14px;font-weight:600;cursor:pointer;border:1.5px solid var(--border);background:#fff;color:var(--dark);transition:all 0.15s;}
+.btn:hover{background:#ebe9e0;}
+.btn-purple{background:var(--purple);border-color:var(--purple);color:#fff;}
+.btn-purple:hover{background:#8b1fd9;border-color:#8b1fd9;}
+.btn-dark{background:var(--dark);border-color:var(--dark);color:#fff;}
+.btn-dark:hover{background:#333;}
+.btn-teal{background:var(--teal);border-color:var(--teal);color:#fff;}
+.btn-teal:hover{background:#0f6e56;}
+
+/* TOAST */
+.toast{
+  position:fixed;bottom:28px;left:50%;transform:translateX(-50%) translateY(80px);
+  background:#1a1a1a;color:#fff;padding:12px 24px;border-radius:12px;
+  font-size:14px;font-weight:500;z-index:999;transition:transform 0.3s;
+  pointer-events:none;white-space:nowrap;
+}
+.toast.show{transform:translateX(-50%) translateY(0);}
+
+/* ESTADO SINCRONIZACIÓN */
+.sync-bar{
+  display:flex;align-items:center;gap:8px;font-size:12px;color:var(--mid);
+  padding:8px 14px;background:#fff;border:1.5px solid var(--border);
+  border-radius:10px;margin-bottom:20px;width:fit-content;
+}
+.sync-dot{width:8px;height:8px;border-radius:50%;background:#ccc;flex-shrink:0;}
+.sync-dot.ok{background:#35d280;}
+.sync-dot.loading{background:#fdf24b;animation:pulse 1s infinite;}
+.sync-dot.error{background:#e5007e;}
+@keyframes pulse{0%,100%{opacity:1;}50%{opacity:0.3;}}
+
+/* MAPA ADMIN */
+.admin-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:10px;}
+.map-badge{background:var(--yellow);color:var(--dark);font-size:13px;font-weight:700;padding:4px 12px;border-radius:20px;}
+.map-tabs{display:flex;gap:4px;background:#fff;padding:5px;border-radius:12px;border:1.5px solid var(--border);width:fit-content;margin-bottom:24px;}
+.map-tab{padding:9px 22px;border-radius:9px;font-size:13px;font-weight:600;cursor:pointer;border:none;background:transparent;font-family:'Barlow',sans-serif;color:var(--mid);transition:all 0.15s;}
+.map-tab.active{background:var(--purple);color:#fff;}
+.map-panel{display:none;} .map-panel.active{display:block;}
+
+/* TABLA */
+.classic-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:20px;}
+.map-col{background:#fff;border:1.5px solid var(--border);border-radius:14px;overflow:hidden;}
+.map-head{padding:12px 16px;font-family:'Bebas Neue',Impact,sans-serif;font-size:17px;letter-spacing:0.05em;}
+.head-o{background:#e8f9ef;color:#1a6b3c;}
+.head-d{background:#fde8f0;color:#8b0040;}
+.map-entry{padding:11px 16px;border-top:1px solid rgba(0,0,0,0.05);}
+.map-ename{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:var(--light);margin-bottom:6px;}
+.map-chips{display:flex;flex-wrap:wrap;gap:5px;}
+.map-chip{padding:3px 9px;border-radius:20px;font-size:11px;font-weight:500;}
+.empty-msg{padding:20px 16px;font-size:13px;color:var(--light);text-align:center;}
+
+/* CANVAS */
+#canvas-burbujas,#canvas-red{width:100%;border-radius:16px;background:#fff;border:1.5px solid var(--border);display:block;}
+
+/* REFRESH */
+.refresh-btn{font-size:12px;padding:6px 14px;border-radius:8px;}
+
+@media(max-width:600px){
+  header{padding:12px 14px;}
+  .header-center{display:none;}
+  main{padding:20px 12px 40px;}
+  h1{font-size:30px;}
+  .classic-grid{grid-template-columns:1fr;}
+  .p-grid{grid-template-columns:1fr 1fr;}
+}
+@media print{
+  header,.btn-row,.map-tabs,.sync-bar,.admin-top{display:none!important;}
+  #s-inicio,#s-admin-login,#s-participante,#s-formulario{display:none!important;}
+  #s-mapa{display:block!important;}
+  .map-panel{display:block!important;}
+  body{background:#fff;}
+}
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════
+     CONFIGURACIÓN — editá estas secciones
+═══════════════════════════════════════════════ -->
+<script>
+/* ─── 1. CONTRASEÑA ADMIN ─── */
+var ADMIN_PWD = 'RIL2025';
+
+/* ─── 2. URL DEL GOOGLE APPS SCRIPT (completar después de configurar) ─── */
+var SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxz41b3v19dP0mjvUZT6D3StRYWxYOoYuu_KErpgWCDbVbU9JHIlCGqq06f0PTweDjf/exec';
+
+/* ─── 3. PARTICIPANTES (editá para cada reunión) ─── */
+var PS = [
+  {id:'remax',       name:'RE/MAX',           role:'Empresa aliada', init:'RM', bg:'#ddeeff', col:'#185fa5'},
+  {id:'galicia',     name:'Banco Galicia',     role:'Empresa aliada', init:'BG', bg:'#d9f4e8', col:'#0f6e56'},
+  {id:'inspirar',    name:'Fund. Inspirar',    role:'Empresa aliada', init:'FI', bg:'#fde8dc', col:'#993c1d'},
+  {id:'pedidosya',   name:'PedidosYa',         role:'Empresa aliada', init:'PY', bg:'#fde0ee', col:'#993556'},
+  {id:'alianzas',    name:'Resp. Alianzas',    role:'RIL',            init:'RA', bg:'#ede8fc', col:'#6b3ccc'},
+  {id:'comunidades', name:'Resp. Comunidades', role:'RIL',            init:'RC', bg:'#ede8fc', col:'#6b3ccc'},
+  {id:'facilitacion',name:'Eq. Facilitación',  role:'RIL',            init:'EF', bg:'#eeede7', col:'#5f5e5a'}
+];
+
+/* ─── 4. OPCIONES DE OFERTA Y DEMANDA ─── */
+var OPCIONES_OFERTA = [
+  'Capacitación',
+  'Mentoría',
+  'Financiamiento',
+  'Espacio físico',
+  'Difusión / comunicación',
+  'Asistencia técnica',
+  'Equipamiento',
+  'Red de contactos',
+  'Certificación',
+  'Acceso a mercados',
+  'Acompañamiento a emprendedores'
+];
+
+var OPCIONES_DEMANDA = [
+  'Emprendedores para acompañar',
+  'Articulación con el municipio',
+  'Datos del ecosistema local',
+  'Alianzas con otras organizaciones',
+  'Visibilidad institucional',
+  'Emprendimientos para financiar',
+  'Espacios de trabajo conjunto',
+  'Apoyo en comunicación y difusión',
+  'Capacitación para el equipo',
+  'Financiamiento para proyectos propios'
+];
+</script>
+<!-- ═══════════════════════════════════════════════ -->
+
+<header>
+  <div class="logo">
+    <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAFAAAABQCAYAAACOEfKtAAAACXBIWXMAAAsTAAALEwEAmpwYAAADx0lEQVR4nO2bS2sUQRSFv5mJiY8oGh9RfOBbURRFQRRFQVFQFEVBUVAUBUVBUVAUFAUFQVEQFAVFQVFQFBQFQVEQFAVFQVEQFAVBQVAQFAQFQUFAEPLYnp3d3Z3ZnZ3Z3Xb3dne7d3fXkiRJkiRJkiRJkiRJkiRJkiRJkiRJ0v+WJEmSJEmSJEmSJEmSJEmSJEmSJEmSJEmSJEmSJEmSJEmSJEmSJEmSJEmSJEmSJEmSJEmSJEmSJEmSJEmSJEmSJEmSJEmSJEmSJEmSpIL4BUk6JfzDfj5DAAAAAElFTkSuQmCC" alt="RIL" style="height:44px;background:var(--purple);border-radius:8px;padding:8px 14px;color:#fff;font-family:'Bebas Neue',sans-serif;font-size:20px;display:flex;align-items:center;justify-content:center;">
+  </div>
+  <div class="header-center">Ciudades Emprendedoras · Dinámica Oferta & Demanda</div>
+  <div class="prog-bar" id="prog-bar"></div>
+</header>
+
+<div class="toast" id="toast"></div>
+
+<main>
+
+<!-- INICIO -->
+<div id="s-inicio" class="step active">
+  <div class="inicio-wrap">
+    <div style="width:80px;height:80px;background:var(--purple);border-radius:20px;display:flex;align-items:center;justify-content:center;margin-bottom:8px;">
+      <span style="font-family:'Bebas Neue',sans-serif;font-size:32px;color:#fff;letter-spacing:2px;">RIL</span>
+    </div>
+    <div class="inicio-title">Dinámica de Oferta y Demanda</div>
+    <div class="inicio-sub">Ciudades Emprendedoras · Empresas Aliadas<br>Seleccioná tu rol para comenzar</div>
+    <div class="inicio-btns">
+      <button class="btn btn-purple" style="font-size:16px;padding:14px 32px;" onclick="mostrar('s-participante');renderGrilla()">Soy participante →</button>
+      <button class="btn btn-dark" style="font-size:16px;padding:14px 32px;" onclick="mostrar('s-admin-login')">Acceso administradora</button>
+    </div>
+  </div>
+</div>
+
+<!-- LOGIN ADMIN -->
+<div id="s-admin-login" class="step">
+  <div class="login-box">
+    <h2>Acceso admin</h2>
+    <p>Ingresá el código para acceder al panel de administración y al mapa en tiempo real</p>
+    <input class="login-inp" id="pwd-inp" type="password" placeholder="••••••" maxlength="20"
+      onkeydown="if(event.key==='Enter')checkPwd()">
+    <div style="margin-top:14px;">
+      <button class="btn btn-purple" style="width:100%" onclick="checkPwd()">Ingresar</button>
+    </div>
+    <div class="login-err" id="login-err"></div>
+    <div style="margin-top:16px;">
+      <button class="btn" style="width:100%;font-size:13px;" onclick="mostrar('s-inicio')">← Volver al inicio</button>
+    </div>
+  </div>
+</div>
+
+<!-- VISTA PARTICIPANTE -->
+<div id="s-participante" class="step">
+  <div class="accent"></div>
+  <h1>¿Quién carga sus datos?</h1>
+  <p class="sub">Seleccioná tu organización y completá la dinámica</p>
+  <div class="p-grid" id="p-grid"></div>
+  <div class="btn-row">
+    <button class="btn" onclick="mostrar('s-inicio')">← Inicio</button>
+    <button class="btn btn-purple" onclick="irFormulario()">Completar mis datos →</button>
+  </div>
+</div>
+
+<!-- FORMULARIO -->
+<div id="s-formulario" class="step">
+  <div class="accent"></div>
+  <div id="f-who" class="form-who"></div>
+  <h1 id="f-title" style="margin-bottom:4px;"></h1>
+  <p class="sub">Seleccioná las opciones que aplican a tu organización</p>
+
+  <!-- OFERTA -->
+  <div class="field-section">
+    <div class="field-lbl">
+      <span class="lbl-dot" style="background:#35d280"></span>
+      ¿Qué podés ofrecer?
+    </div>
+    <p class="field-hint">Recursos, servicios o capacidades que tu organización puede aportar al ecosistema</p>
+    <div class="chip-grid" id="chips-offer"></div>
+    <div class="selected-count" id="count-offer">0 seleccionadas</div>
+  </div>
+
+  <!-- DEMANDA -->
+  <div class="field-section">
+    <div class="field-lbl">
+      <span class="lbl-dot" style="background:#e5007e"></span>
+      ¿Qué necesitás?
+    </div>
+    <p class="field-hint">Lo que tu organización busca o necesita para potenciar su trabajo en el programa</p>
+    <div class="chip-grid" id="chips-demand"></div>
+    <div class="selected-count" id="count-demand">0 seleccionadas</div>
+  </div>
+
+  <div class="btn-row">
+    <button class="btn" onclick="mostrar('s-participante');renderGrilla()">← Volver</button>
+    <button class="btn btn-purple" onclick="guardar()" id="btn-guardar">Guardar →</button>
+  </div>
+</div>
+
+<!-- MAPA ADMIN -->
+<div id="s-mapa" class="step">
+  <div class="accent"></div>
+  <div class="admin-top">
+    <div>
+      <h1 style="margin-bottom:2px;">Mapa del ecosistema</h1>
+      <p class="sub" style="margin-bottom:0;">Vista completa · actualización en tiempo real</p>
+    </div>
+    <div style="display:flex;align-items:center;gap:10px;">
+      <span class="map-badge" id="map-count">0 / 0</span>
+      <button class="btn refresh-btn" onclick="cargarDatosYRenderizar()">↻ Actualizar</button>
+    </div>
+  </div>
+
+  <div class="sync-bar" id="sync-bar">
+    <div class="sync-dot" id="sync-dot"></div>
+    <span id="sync-text">Sin conexión con Google Sheets</span>
+  </div>
+
+  <div class="map-tabs">
+    <button class="map-tab active" onclick="switchTab('tabla')">Lista por participante</button>
+    <button class="map-tab" onclick="switchTab('burbujas')">Temas en común</button>
+    <button class="map-tab" onclick="switchTab('red')">Red de conexiones</button>
+  </div>
+
+  <div id="panel-tabla" class="map-panel active">
+    <div class="classic-grid" id="map-grid-tabla"></div>
+  </div>
+  <div id="panel-burbujas" class="map-panel">
+    <p style="font-size:13px;color:var(--mid);margin-bottom:14px;">Cada burbuja es una categoría. El tamaño indica cuántas organizaciones la mencionaron. Verde = oferta · Rosa = demanda · Violeta = ambas.</p>
+    <canvas id="canvas-burbujas" height="460"></canvas>
+  </div>
+  <div id="panel-red" class="map-panel">
+    <p style="font-size:13px;color:var(--mid);margin-bottom:14px;">Las líneas conectan a quienes comparten categorías. Más gruesa = más coincidencias. Especialmente valioso: oferta de uno cubre demanda de otro.</p>
+    <canvas id="canvas-red" height="460"></canvas>
+  </div>
+
+  <div class="btn-row" style="margin-top:20px;">
+    <button class="btn" onclick="mostrar('s-participante');renderGrilla()">← Ver participantes</button>
+    <button class="btn btn-dark" onclick="window.print()">Imprimir / PDF</button>
+  </div>
+</div>
+
+</main>
+
+<script>
+/* ══════════════════════════════════════════
+   ESTADO
+══════════════════════════════════════════ */
+var estado = {
+  seleccionado: null,
+  cargado: {},      // datos locales (caché)
+  temp: { offers:[], demands:[] }
+};
+var tabActual = 'tabla';
+var autoRefreshInterval = null;
+
+/* ══════════════════════════════════════════
+   NAVEGACIÓN
+══════════════════════════════════════════ */
+function mostrar(id){
+  document.querySelectorAll('.step').forEach(function(s){ s.classList.remove('active'); });
+  document.getElementById(id).classList.add('active');
 }
 
-function doGet(e) {
-  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Datos');
-  if(!sheet) return ContentService.createTextOutput('{}').setMimeType(ContentService.MimeType.JSON);
-  
-  var rows = sheet.getDataRange().getValues();
-  var result = {};
-  for(var i=1; i<rows.length; i++){
-    if(!rows[i][0]) continue;
-    result[rows[i][0]] = {
-      offers: rows[i][2] ? rows[i][2].split('|') : [],
-      demands: rows[i][3] ? rows[i][3].split('|') : []
-    };
+function checkPwd(){
+  var v = document.getElementById('pwd-inp').value;
+  if(v === ADMIN_PWD){
+    document.getElementById('pwd-inp').value = '';
+    document.getElementById('login-err').textContent = '';
+    mostrar('s-mapa');
+    cargarDatosYRenderizar();
+    iniciarAutoRefresh();
+  } else {
+    document.getElementById('login-err').textContent = 'Código incorrecto. Intentá de nuevo.';
   }
-  return ContentService.createTextOutput(JSON.stringify(result))
-    .setMimeType(ContentService.MimeType.JSON);
 }
+
+function irFormulario(){
+  if(!estado.seleccionado){ showToast('Seleccioná una organización primero'); return; }
+  abrirFormulario(estado.seleccionado);
+}
+
+function seleccionar(id){
+  estado.seleccionado = id;
+  renderGrilla();
+}
+
+/* ══════════════════════════════════════════
+   FORMULARIO
+══════════════════════════════════════════ */
+function abrirFormulario(id){
+  estado.seleccionado = id;
+  var p = PS.filter(function(x){ return x.id === id; })[0];
+  var prev = estado.cargado[id] || { offers:[], demands:[] };
+  estado.temp = { offers: prev.offers.slice(), demands: prev.demands.slice() };
+
+  document.getElementById('f-title').textContent = p.name;
+  document.getElementById('f-who').innerHTML =
+    '<div class="f-av" style="background:'+p.bg+';color:'+p.col+'">'+p.init+'</div>'+
+    '<div><div class="f-name">'+p.name+'</div><div class="f-role">'+p.role+'</div></div>';
+
+  renderChipSelectors();
+  mostrar('s-formulario');
+}
+
+function renderChipSelectors(){
+  renderChipGroup('chips-offer', 'offer', OPCIONES_OFERTA, estado.temp.offers);
+  renderChipGroup('chips-demand', 'demand', OPCIONES_DEMANDA, estado.temp.demands);
+  actualizarContadores();
+}
+
+function renderChipGroup(containerId, tipo, opciones, seleccionados){
+  var c = document.getElementById(containerId);
+  var h = '';
+  opciones.forEach(function(op){
+    var isActive = seleccionados.indexOf(op) >= 0;
+    var cls = tipo === 'offer' ? 'offer-chip' : 'demand-chip';
+    h += '<div class="sel-chip '+cls+(isActive?' active':'')+'" onclick="toggleChip(\''+tipo+'\',\''+esc(op)+'\')">' +
+         '<div class="chip-check"></div>'+esc(op)+'</div>';
+  });
+  c.innerHTML = h;
+}
+
+function toggleChip(tipo, valor){
+  var key = tipo === 'offer' ? 'offers' : 'demands';
+  var arr = estado.temp[key];
+  var idx = arr.indexOf(valor);
+  if(idx >= 0){
+    arr.splice(idx, 1);
+  } else {
+    arr.push(valor);
+  }
+  var containerId = tipo === 'offer' ? 'chips-offer' : 'chips-demand';
+  var opciones = tipo === 'offer' ? OPCIONES_OFERTA : OPCIONES_DEMANDA;
+  renderChipGroup(containerId, tipo, opciones, arr);
+  actualizarContadores();
+}
+
+function actualizarContadores(){
+  var no = estado.temp.offers.length;
+  var nd = estado.temp.demands.length;
+  document.getElementById('count-offer').innerHTML =
+    '<span>'+no+'</span> '+(no===1?'opción seleccionada':'opciones seleccionadas');
+  document.getElementById('count-demand').innerHTML =
+    '<span>'+nd+'</span> '+(nd===1?'opción seleccionada':'opciones seleccionadas');
+}
+
+/* ══════════════════════════════════════════
+   GUARDAR → GOOGLE SHEETS
+══════════════════════════════════════════ */
+function guardar(){
+  var offers = estado.temp.offers;
+  var demands = estado.temp.demands;
+  if(!offers.length && !demands.length){
+    showToast('Seleccioná al menos una opción antes de guardar');
+    return;
+  }
+
+  var btn = document.getElementById('btn-guardar');
+  btn.textContent = 'Guardando…';
+  btn.disabled = true;
+
+  // Guardar localmente siempre
+  estado.cargado[estado.seleccionado] = { offers: offers.slice(), demands: demands.slice() };
+
+  // Intentar enviar a Google Sheets
+  if(SCRIPT_URL && SCRIPT_URL !== 'TU_URL_AQUI'){
+    var payload = {
+      action: 'guardar',
+      id: estado.seleccionado,
+      nombre: PS.filter(function(p){ return p.id === estado.seleccionado; })[0].name,
+      offers: offers.join('|'),
+      demands: demands.join('|')
+    };
+
+    fetch(SCRIPT_URL, {
+      method: 'POST',
+      mode: 'no-cors',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    }).then(function(){
+      btn.textContent = 'Guardar →';
+      btn.disabled = false;
+      showToast('✓ Datos guardados');
+      mostrar('s-participante');
+      renderGrilla();
+    }).catch(function(){
+      btn.textContent = 'Guardar →';
+      btn.disabled = false;
+      showToast('Guardado localmente (sin conexión al sheet)');
+      mostrar('s-participante');
+      renderGrilla();
+    });
+  } else {
+    // Sin sheet configurado: solo local
+    btn.textContent = 'Guardar →';
+    btn.disabled = false;
+    showToast('✓ Datos guardados localmente');
+    mostrar('s-participante');
+    renderGrilla();
+  }
+}
+
+/* ══════════════════════════════════════════
+   CARGAR DATOS DESDE GOOGLE SHEETS
+══════════════════════════════════════════ */
+function cargarDatosYRenderizar(){
+  if(!SCRIPT_URL || SCRIPT_URL === 'TU_URL_AQUI'){
+    setSyncStatus('error', 'Configurá el SCRIPT_URL para ver datos en tiempo real');
+    renderMapa();
+    return;
+  }
+
+  setSyncStatus('loading', 'Actualizando datos…');
+
+  fetch(SCRIPT_URL + '?action=leer')
+    .then(function(r){ return r.json(); })
+    .then(function(data){
+      // data es un objeto { id: {offers:[], demands:[]}, ... }
+      Object.keys(data).forEach(function(id){
+        estado.cargado[id] = data[id];
+      });
+      setSyncStatus('ok', 'Actualizado · ' + new Date().toLocaleTimeString('es-AR'));
+      renderMapa();
+    })
+    .catch(function(e){
+      setSyncStatus('error', 'Error al conectar con Google Sheets');
+      renderMapa();
+    });
+}
+
+function iniciarAutoRefresh(){
+  if(autoRefreshInterval) clearInterval(autoRefreshInterval);
+  // Actualizar cada 30 segundos mientras está en el mapa
+  autoRefreshInterval = setInterval(function(){
+    var mapaActivo = document.getElementById('s-mapa').classList.contains('active');
+    if(mapaActivo) cargarDatosYRenderizar();
+  }, 30000);
+}
+
+function setSyncStatus(estado, texto){
+  var dot = document.getElementById('sync-dot');
+  var txt = document.getElementById('sync-text');
+  dot.className = 'sync-dot ' + estado;
+  txt.textContent = texto;
+}
+
+/* ══════════════════════════════════════════
+   GRILLA PARTICIPANTES
+══════════════════════════════════════════ */
+function renderGrilla(){
+  var h = '';
+  PS.forEach(function(p){
+    var d = estado.cargado[p.id] ? ' done' : '';
+    var s = estado.seleccionado === p.id ? ' sel' : '';
+    h += '<div class="p-card'+d+s+'" onclick="seleccionar(\''+p.id+'\')">'+
+         '<div class="p-av" style="background:'+p.bg+';color:'+p.col+'">'+p.init+'</div>'+
+         '<div class="p-name">'+p.name+'</div>'+
+         '<div class="p-role">'+p.role+'</div></div>';
+  });
+  document.getElementById('p-grid').innerHTML = h;
+  renderProg();
+}
+
+function renderProg(){
+  var h = '';
+  PS.forEach(function(p){
+    h += '<div class="prog-dot'+(estado.cargado[p.id]?' done':'')+'" title="'+p.name+'"></div>';
+  });
+  document.getElementById('prog-bar').innerHTML = h;
+}
+
+/* ══════════════════════════════════════════
+   TABS MAPA
+══════════════════════════════════════════ */
+function switchTab(t){
+  tabActual = t;
+  document.querySelectorAll('.map-tab').forEach(function(b,i){
+    b.classList.toggle('active', ['tabla','burbujas','red'][i] === t);
+  });
+  document.querySelectorAll('.map-panel').forEach(function(p){ p.classList.remove('active'); });
+  document.getElementById('panel-'+t).classList.add('active');
+  if(t === 'burbujas') dibujarBurbujas();
+  if(t === 'red') dibujarRed();
+}
+
+/* ══════════════════════════════════════════
+   MAPA GENERAL
+══════════════════════════════════════════ */
+function renderMapa(){
+  var cargados = PS.filter(function(p){ return estado.cargado[p.id]; });
+  document.getElementById('map-count').textContent = cargados.length + ' / ' + PS.length;
+  renderTabla(cargados);
+  if(tabActual === 'burbujas') dibujarBurbujas();
+  if(tabActual === 'red') dibujarRed();
+}
+
+/* ── TAB 1: TABLA ── */
+function renderTabla(cargados){
+  var g = document.getElementById('map-grid-tabla');
+  g.innerHTML = '';
+  g.appendChild(buildMapCol(cargados, 'offers', '⊕ Lo que ofrecemos', 'head-o'));
+  g.appendChild(buildMapCol(cargados, 'demands', '⊘ Lo que necesitamos', 'head-d'));
+}
+
+function buildMapCol(cargados, key, label, hClass){
+  var col = document.createElement('div'); col.className = 'map-col';
+  var h = document.createElement('div'); h.className = 'map-head '+hClass; h.textContent = label; col.appendChild(h);
+  var any = false;
+  cargados.forEach(function(p){
+    var items = estado.cargado[p.id][key];
+    if(!items || !items.length) return;
+    any = true;
+    var e = document.createElement('div'); e.className = 'map-entry';
+    var n = document.createElement('div'); n.className = 'map-ename'; n.textContent = p.name; e.appendChild(n);
+    var ch = document.createElement('div'); ch.className = 'map-chips';
+    items.forEach(function(item){
+      var c = document.createElement('span'); c.className = 'map-chip';
+      c.style.background = p.bg; c.style.color = p.col; c.textContent = item; ch.appendChild(c);
+    });
+    e.appendChild(ch); col.appendChild(e);
+  });
+  if(!any){ var m = document.createElement('div'); m.className = 'empty-msg'; m.textContent = 'Sin datos aún'; col.appendChild(m); }
+  return col;
+}
+
+/* ── TAB 2: BURBUJAS ── */
+function dibujarBurbujas(){
+  var cv = document.getElementById('canvas-burbujas');
+  var W = cv.offsetWidth || 800; cv.width = W; cv.height = 480;
+  var ctx = cv.getContext('2d');
+  ctx.clearRect(0,0,W,480);
+
+  var palabras = {};
+  PS.forEach(function(p){
+    var d = estado.cargado[p.id];
+    if(!d) return;
+    d.offers.forEach(function(w){
+      if(!palabras[w]) palabras[w] = {w:w, countO:0, countD:0};
+      palabras[w].countO++;
+    });
+    d.demands.forEach(function(w){
+      if(!palabras[w]) palabras[w] = {w:w, countO:0, countD:0};
+      palabras[w].countD++;
+    });
+  });
+
+  var lista = Object.values(palabras);
+  if(!lista.length){
+    ctx.fillStyle='#999'; ctx.font='14px Barlow,sans-serif'; ctx.textAlign='center';
+    ctx.fillText('No hay datos cargados aún', W/2, 240); return;
+  }
+
+  lista.forEach(function(x){
+    x.count = x.countO + x.countD;
+    x.tipo = x.countO > 0 && x.countD > 0 ? 'ambos' : x.countO > 0 ? 'offer' : 'demand';
+  });
+
+  var maxC = Math.max.apply(null, lista.map(function(x){ return x.count; }));
+  var burbs = lista.map(function(x, i){
+    var r = Math.max(30, Math.min(65, 30 + (x.count/maxC)*35));
+    var angle = (i/lista.length)*Math.PI*2*2.5;
+    var dist = Math.min(W,480)*0.26 + (i*16);
+    return { x: W/2+Math.cos(angle)*dist*0.52, y: 240+Math.sin(angle)*dist*0.40, r:r, label:x.w, tipo:x.tipo, count:x.count, countO:x.countO, countD:x.countD };
+  });
+
+  for(var iter=0; iter<50; iter++){
+    for(var a=0; a<burbs.length; a++){
+      for(var b=a+1; b<burbs.length; b++){
+        var dx=burbs[b].x-burbs[a].x, dy=burbs[b].y-burbs[a].y;
+        var d2=Math.sqrt(dx*dx+dy*dy)||1;
+        var minD=burbs[a].r+burbs[b].r+12;
+        if(d2<minD){
+          var push=(minD-d2)/2, nx=dx/d2, ny=dy/d2;
+          burbs[a].x-=nx*push*0.5; burbs[a].y-=ny*push*0.5;
+          burbs[b].x+=nx*push*0.5; burbs[b].y+=ny*push*0.5;
+        }
+      }
+      burbs[a].x=Math.max(burbs[a].r+8,Math.min(W-burbs[a].r-8,burbs[a].x));
+      burbs[a].y=Math.max(burbs[a].r+8,Math.min(472-burbs[a].r-8,burbs[a].y));
+    }
+  }
+
+  burbs.forEach(function(b){
+    var fill,stroke,textCol;
+    if(b.tipo==='offer'){fill='#e8f9ef';stroke='#35d280';textCol='#1a6b3c';}
+    else if(b.tipo==='demand'){fill='#fde8f0';stroke='#e5007e';textCol='#8b0040';}
+    else{fill='#f0ebff';stroke='#a62bff';textCol='#4a1b8c';}
+
+    ctx.shadowColor='rgba(0,0,0,0.07)'; ctx.shadowBlur=10;
+    ctx.beginPath(); ctx.arc(b.x,b.y,b.r,0,Math.PI*2);
+    ctx.fillStyle=fill; ctx.fill();
+    ctx.shadowBlur=0;
+    ctx.strokeStyle=stroke; ctx.lineWidth=b.count>1?2.5:1.5; ctx.stroke();
+
+    ctx.fillStyle=textCol; ctx.textAlign='center'; ctx.textBaseline='middle';
+    var fs=Math.max(9,Math.min(13,b.r*0.36));
+    ctx.font='600 '+fs+'px Barlow,sans-serif';
+    var label=b.label.length>18?b.label.slice(0,17)+'…':b.label;
+    wrapText(ctx,label,b.x,b.y,b.r*1.75,fs+3);
+
+    if(b.count>1){
+      ctx.font='500 '+(Math.max(8,fs-2))+'px Barlow,sans-serif';
+      ctx.fillStyle=stroke;
+      ctx.fillText('×'+b.count, b.x, b.y+b.r-11);
+    }
+  });
+
+  // Leyenda
+  var leg=[{c:'#e8f9ef',s:'#35d280',t:'#1a6b3c',l:'Oferta'},{c:'#fde8f0',s:'#e5007e',t:'#8b0040',l:'Demanda'},{c:'#f0ebff',s:'#a62bff',t:'#4a1b8c',l:'Ambas'}];
+  var lx=12;
+  leg.forEach(function(le){
+    ctx.beginPath(); ctx.arc(lx+9,468,8,0,Math.PI*2); ctx.fillStyle=le.c; ctx.fill();
+    ctx.strokeStyle=le.s; ctx.lineWidth=1.5; ctx.stroke();
+    ctx.fillStyle=le.t; ctx.font='500 11px Barlow,sans-serif'; ctx.textAlign='left'; ctx.textBaseline='middle';
+    ctx.fillText(le.l,lx+22,468); lx+=72;
+  });
+}
+
+function wrapText(ctx,text,x,y,maxW,lineH){
+  var words=text.split(' ');
+  if(words.length===1){ctx.fillText(text,x,y);return;}
+  var lines=[],cur='';
+  words.forEach(function(w){
+    var test=cur?cur+' '+w:w;
+    if(ctx.measureText(test).width>maxW&&cur){lines.push(cur);cur=w;}
+    else cur=test;
+  });
+  if(cur)lines.push(cur);
+  var startY=y-(lines.length-1)*lineH/2;
+  lines.forEach(function(l,i){ctx.fillText(l,x,startY+i*lineH);});
+}
+
+/* ── TAB 3: RED ── */
+function dibujarRed(){
+  var cv=document.getElementById('canvas-red');
+  var W=cv.offsetWidth||800; cv.width=W; cv.height=460;
+  var ctx=cv.getContext('2d');
+  ctx.clearRect(0,0,W,460);
+
+  var cargados=PS.filter(function(p){return estado.cargado[p.id];});
+  if(cargados.length<2){
+    ctx.fillStyle='#999'; ctx.font='14px Barlow,sans-serif'; ctx.textAlign='center';
+    ctx.fillText('Necesitás al menos 2 participantes con datos',W/2,230); return;
+  }
+
+  var cx=W/2, cy=220, radio=Math.min(W,440)*0.32;
+  var nodos=cargados.map(function(p,i){
+    var angle=(i/cargados.length)*Math.PI*2-Math.PI/2;
+    return {id:p.id,name:p.name,init:p.init,bg:p.bg,col:p.col,x:cx+Math.cos(angle)*radio,y:cy+Math.sin(angle)*radio};
+  });
+
+  var conexiones=[];
+  for(var i=0;i<cargados.length;i++){
+    for(var j=i+1;j<cargados.length;j++){
+      var ai=estado.cargado[cargados[i].id];
+      var aj=estado.cargado[cargados[j].id];
+      var score=0;
+      // Coincidencia directa (misma categoría en cualquier lista)
+      ai.offers.forEach(function(w){if(aj.offers.indexOf(w)>=0||aj.demands.indexOf(w)>=0)score++;});
+      ai.demands.forEach(function(w){if(aj.offers.indexOf(w)>=0||aj.demands.indexOf(w)>=0)score++;});
+      // Match perfecto oferta↔demanda (vale doble)
+      ai.offers.forEach(function(w){if(aj.demands.indexOf(w)>=0)score+=2;});
+      aj.offers.forEach(function(w){if(ai.demands.indexOf(w)>=0)score+=2;});
+      if(score>0)conexiones.push({i:i,j:j,score:score});
+    }
+  }
+
+  var maxScore=conexiones.length?Math.max.apply(null,conexiones.map(function(c){return c.score;})):1;
+
+  conexiones.forEach(function(c){
+    var ni=nodos[c.i],nj=nodos[c.j];
+    var alpha=0.15+0.65*(c.score/maxScore);
+    var width=1+3.5*(c.score/maxScore);
+    ctx.beginPath(); ctx.moveTo(ni.x,ni.y); ctx.lineTo(nj.x,nj.y);
+    ctx.strokeStyle='rgba(166,43,255,'+alpha+')';
+    ctx.lineWidth=width; ctx.stroke();
+    if(c.score>=2){
+      var mx=(ni.x+nj.x)/2,my=(ni.y+nj.y)/2;
+      ctx.fillStyle='#fff'; ctx.beginPath(); ctx.arc(mx,my,10,0,Math.PI*2); ctx.fill();
+      ctx.strokeStyle='rgba(166,43,255,0.35)'; ctx.lineWidth=1; ctx.stroke();
+      ctx.fillStyle='#a62bff'; ctx.font='600 9px Barlow,sans-serif';
+      ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText(c.score,mx,my);
+    }
+  });
+
+  var R=30;
+  nodos.forEach(function(n){
+    ctx.shadowColor='rgba(0,0,0,0.1)'; ctx.shadowBlur=12;
+    ctx.beginPath(); ctx.arc(n.x,n.y,R,0,Math.PI*2);
+    ctx.fillStyle=n.bg; ctx.fill();
+    ctx.shadowBlur=0; ctx.strokeStyle=n.col; ctx.lineWidth=2; ctx.stroke();
+    ctx.fillStyle=n.col; ctx.font='700 13px Barlow,sans-serif';
+    ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText(n.init,n.x,n.y);
+    ctx.font='500 10px Barlow,sans-serif'; ctx.fillStyle=n.col;
+    var labelY=n.y>cy?n.y+R+13:n.y-R-5;
+    ctx.fillText(n.name,n.x,labelY);
+  });
+
+  if(!conexiones.length){
+    ctx.fillStyle='#999'; ctx.font='13px Barlow,sans-serif'; ctx.textAlign='center';
+    ctx.fillText('Sin coincidencias aún — cargá más datos',W/2,440);
+  }
+}
+
+/* ══════════════════════════════════════════
+   UTILS
+══════════════════════════════════════════ */
+function esc(s){
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+function showToast(msg){
+  var t=document.getElementById('toast');
+  t.textContent=msg; t.classList.add('show');
+  setTimeout(function(){ t.classList.remove('show'); },2800);
+}
+
+// Init
+renderGrilla();
+</script>
+</body>
+</html>
