@@ -92,6 +92,33 @@ h1{font-family:'Bebas Neue',Impact,sans-serif;font-size:42px;letter-spacing:0.03
 .selected-count{font-size:12px;color:var(--mid);margin-top:10px;}
 .selected-count span{font-weight:700;color:var(--dark);}
 
+/* CHIP "OTROS" CON TEXTO LIBRE */
+.otros-wrap{margin-top:10px;display:none;}
+.otros-wrap.show{display:block;}
+.otros-inp{width:100%;max-width:420px;padding:9px 14px;border:1.5px solid var(--border);border-radius:10px;font-family:'Barlow',sans-serif;font-size:13px;outline:none;}
+.otros-inp:focus{border-color:var(--purple);}
+.otros-tags{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;}
+.otros-tag{display:inline-flex;align-items:center;gap:5px;padding:5px 11px;border-radius:20px;font-size:12px;font-weight:500;}
+.otros-tag.offer-tag{background:#e8f9ef;color:#1a6b3c;}
+.otros-tag.demand-tag{background:#fde8f0;color:#8b0040;}
+.otros-tag-x{font-size:11px;opacity:0.6;cursor:pointer;background:none;border:none;padding:0;font-family:inherit;color:inherit;}
+.otros-tag-x:hover{opacity:1;}
+
+/* AGREGAR ORGANIZACIÓN */
+.p-card-add{
+  padding:15px;background:transparent;border:1.5px dashed var(--light);border-radius:14px;
+  cursor:pointer;transition:all 0.15s;display:flex;flex-direction:column;align-items:center;
+  justify-content:center;gap:6px;color:var(--mid);min-height:88px;
+}
+.p-card-add:hover{border-color:var(--purple);color:var(--purple);}
+.p-card-add .plus-icon{font-size:20px;font-weight:300;line-height:1;}
+.add-org-box{
+  background:#fff;border:1.5px solid var(--border);border-radius:14px;padding:18px;
+  margin-bottom:20px;display:none;
+}
+.add-org-box.show{display:block;}
+.add-org-row{display:flex;gap:8px;}
+
 /* BOTONES */
 .btn-row{display:flex;gap:10px;flex-wrap:wrap;margin-top:8px;}
 .btn{padding:11px 22px;border-radius:10px;font-family:'Barlow',sans-serif;font-size:14px;font-weight:600;cursor:pointer;border:1.5px solid var(--border);background:#fff;color:var(--dark);transition:all 0.15s;}
@@ -190,8 +217,8 @@ var PS = [
   {id:'facilitacion',name:'Eq. Facilitación',  role:'RIL',            init:'EF', bg:'#eeede7', col:'#5f5e5a'}
 ];
 
-/* ─── 4. OPCIONES DE OFERTA Y DEMANDA ─── */
-var OPCIONES_OFERTA = [
+/* ─── 4. OPCIONES (la misma lista se usa para Oferta y para Demanda) ─── */
+var OPCIONES = [
   'Capacitación',
   'Mentoría',
   'Financiamiento',
@@ -202,10 +229,7 @@ var OPCIONES_OFERTA = [
   'Red de contactos',
   'Certificación',
   'Acceso a mercados',
-  'Acompañamiento a emprendedores'
-];
-
-var OPCIONES_DEMANDA = [
+  'Acompañamiento a emprendedores',
   'Emprendedores para acompañar',
   'Articulación con el municipio',
   'Datos del ecosistema local',
@@ -215,8 +239,15 @@ var OPCIONES_DEMANDA = [
   'Espacios de trabajo conjunto',
   'Apoyo en comunicación y difusión',
   'Capacitación para el equipo',
-  'Financiamiento para proyectos propios'
+  'Financiamiento para proyectos propios',
+  'Datos estadísticos',
+  'Vinculación con nuevos aliados',
+  'Alianzas',
+  'Información del ecosistema'
 ];
+
+/* Texto del último chip que habilita escribir algo libre */
+var CHIP_OTROS = 'Otros';
 </script>
 <!-- ═══════════════════════════════════════════════ -->
 
@@ -268,7 +299,17 @@ var OPCIONES_DEMANDA = [
 <div id="s-participante" class="step">
   <div class="accent"></div>
   <h1>¿Quién carga sus datos?</h1>
-  <p class="sub">Seleccioná tu organización y completá la dinámica</p>
+  <p class="sub">Seleccioná tu organización y completá la dinámica. Si no estás en la lista, podés agregarte.</p>
+
+  <div class="add-org-box" id="add-org-box">
+    <div class="field-lbl" style="margin-bottom:10px;"><span class="lbl-dot" style="background:var(--purple)"></span>Nueva organización</div>
+    <div class="add-org-row">
+      <input class="txt-inp" id="inp-nueva-org" placeholder="Nombre de la organización" onkeydown="if(event.key==='Enter'){confirmarNuevaOrg();event.preventDefault();}">
+      <button class="add-btn" onclick="confirmarNuevaOrg()">Agregar</button>
+      <button class="btn" onclick="toggleAddOrg(false)">Cancelar</button>
+    </div>
+  </div>
+
   <div class="p-grid" id="p-grid"></div>
   <div class="btn-row">
     <button class="btn" onclick="mostrar('s-inicio')">← Inicio</button>
@@ -291,6 +332,11 @@ var OPCIONES_DEMANDA = [
     </div>
     <p class="field-hint">Recursos, servicios o capacidades que tu organización puede aportar al ecosistema</p>
     <div class="chip-grid" id="chips-offer"></div>
+    <div class="otros-wrap" id="otros-wrap-offer">
+      <input class="otros-inp" id="otros-inp-offer" placeholder="Escribí algo específico y apretá Enter"
+        onkeydown="if(event.key==='Enter'){agregarOtro('offer');event.preventDefault();}">
+      <div class="otros-tags" id="otros-tags-offer"></div>
+    </div>
     <div class="selected-count" id="count-offer">0 seleccionadas</div>
   </div>
 
@@ -302,6 +348,11 @@ var OPCIONES_DEMANDA = [
     </div>
     <p class="field-hint">Lo que tu organización busca o necesita para potenciar su trabajo en el programa</p>
     <div class="chip-grid" id="chips-demand"></div>
+    <div class="otros-wrap" id="otros-wrap-demand">
+      <input class="otros-inp" id="otros-inp-demand" placeholder="Escribí algo específico y apretá Enter"
+        onkeydown="if(event.key==='Enter'){agregarOtro('demand');event.preventDefault();}">
+      <div class="otros-tags" id="otros-tags-demand"></div>
+    </div>
     <div class="selected-count" id="count-demand">0 seleccionadas</div>
   </div>
 
@@ -399,6 +450,53 @@ function seleccionar(id){
   renderGrilla();
 }
 
+/* ── agregar organización en vivo ── */
+var PALETA_NUEVOS = [
+  {bg:'#fef3c7', col:'#92400e'},
+  {bg:'#dbeafe', col:'#1e40af'},
+  {bg:'#fce7f3', col:'#9d174d'},
+  {bg:'#d1fae5', col:'#065f46'},
+  {bg:'#ede9fe', col:'#5b21b6'},
+  {bg:'#fee2e2', col:'#991b1b'},
+  {bg:'#e0f2fe', col:'#075985'},
+  {bg:'#fef9c3', col:'#854d0e'}
+];
+
+function toggleAddOrg(show){
+  var box = document.getElementById('add-org-box');
+  if(show){
+    box.classList.add('show');
+    document.getElementById('inp-nueva-org').focus();
+  } else {
+    box.classList.remove('show');
+    document.getElementById('inp-nueva-org').value = '';
+  }
+}
+
+function iniciales(nombre){
+  var palabras = nombre.trim().split(/\s+/);
+  if(palabras.length === 1) return palabras[0].slice(0,2).toUpperCase();
+  return (palabras[0][0]+palabras[1][0]).toUpperCase();
+}
+
+function confirmarNuevaOrg(){
+  var inp = document.getElementById('inp-nueva-org');
+  var nombre = inp.value.trim();
+  if(!nombre){ showToast('Escribí un nombre antes de agregar'); return; }
+
+  var id = 'org_' + Date.now();
+  var color = PALETA_NUEVOS[PS.length % PALETA_NUEVOS.length];
+  PS.push({
+    id: id, name: nombre, role: 'Participante', init: iniciales(nombre),
+    bg: color.bg, col: color.col
+  });
+
+  inp.value = '';
+  toggleAddOrg(false);
+  renderGrilla();
+  showToast('✓ '+nombre+' agregada — ya podés seleccionarla');
+}
+
 /* ══════════════════════════════════════════
    FORMULARIO
 ══════════════════════════════════════════ */
@@ -413,25 +511,38 @@ function abrirFormulario(id){
     '<div class="f-av" style="background:'+p.bg+';color:'+p.col+'">'+p.init+'</div>'+
     '<div><div class="f-name">'+p.name+'</div><div class="f-role">'+p.role+'</div></div>';
 
+  document.getElementById('otros-inp-offer').value = '';
+  document.getElementById('otros-inp-demand').value = '';
+  document.getElementById('otros-wrap-offer').classList.remove('show');
+  document.getElementById('otros-wrap-demand').classList.remove('show');
+
   renderChipSelectors();
   mostrar('s-formulario');
 }
 
 function renderChipSelectors(){
-  renderChipGroup('chips-offer', 'offer', OPCIONES_OFERTA, estado.temp.offers);
-  renderChipGroup('chips-demand', 'demand', OPCIONES_DEMANDA, estado.temp.demands);
+  renderChipGroup('chips-offer', 'offer', estado.temp.offers);
+  renderChipGroup('chips-demand', 'demand', estado.temp.demands);
+  renderOtrosTags('offer');
+  renderOtrosTags('demand');
+  actualizarOtrosVisibilidad('offer');
+  actualizarOtrosVisibilidad('demand');
   actualizarContadores();
 }
 
-function renderChipGroup(containerId, tipo, opciones, seleccionados){
+function renderChipGroup(containerId, tipo, seleccionados){
   var c = document.getElementById(containerId);
+  var cls = tipo === 'offer' ? 'offer-chip' : 'demand-chip';
   var h = '';
-  opciones.forEach(function(op){
+  OPCIONES.forEach(function(op){
     var isActive = seleccionados.indexOf(op) >= 0;
-    var cls = tipo === 'offer' ? 'offer-chip' : 'demand-chip';
     h += '<div class="sel-chip '+cls+(isActive?' active':'')+'" onclick="toggleChip(\''+tipo+'\',\''+esc(op)+'\')">' +
          '<div class="chip-check"></div>'+esc(op)+'</div>';
   });
+  // Chip especial "Otros" — activo si hay algún ítem cargado que no está en OPCIONES
+  var tieneOtros = seleccionados.some(function(s){ return OPCIONES.indexOf(s) < 0; });
+  h += '<div class="sel-chip '+cls+(tieneOtros?' active':'')+'" onclick="toggleOtrosPanel(\''+tipo+'\')">' +
+       '<div class="chip-check"></div>'+CHIP_OTROS+'</div>';
   c.innerHTML = h;
 }
 
@@ -445,9 +556,60 @@ function toggleChip(tipo, valor){
     arr.push(valor);
   }
   var containerId = tipo === 'offer' ? 'chips-offer' : 'chips-demand';
-  var opciones = tipo === 'offer' ? OPCIONES_OFERTA : OPCIONES_DEMANDA;
-  renderChipGroup(containerId, tipo, opciones, arr);
+  renderChipGroup(containerId, tipo, arr);
   actualizarContadores();
+}
+
+function toggleOtrosPanel(tipo){
+  var wrap = document.getElementById('otros-wrap-'+tipo);
+  wrap.classList.toggle('show');
+  if(wrap.classList.contains('show')){
+    document.getElementById('otros-inp-'+tipo).focus();
+  }
+}
+
+function actualizarOtrosVisibilidad(tipo){
+  var key = tipo === 'offer' ? 'offers' : 'demands';
+  var tieneOtros = estado.temp[key].some(function(s){ return OPCIONES.indexOf(s) < 0; });
+  var wrap = document.getElementById('otros-wrap-'+tipo);
+  if(tieneOtros) wrap.classList.add('show');
+}
+
+function agregarOtro(tipo){
+  var inp = document.getElementById('otros-inp-'+tipo);
+  var val = inp.value.trim();
+  if(!val) return;
+  var key = tipo === 'offer' ? 'offers' : 'demands';
+  estado.temp[key].push(val);
+  inp.value = '';
+  renderOtrosTags(tipo);
+  var containerId = tipo === 'offer' ? 'chips-offer' : 'chips-demand';
+  renderChipGroup(containerId, tipo, estado.temp[key]);
+  actualizarContadores();
+  inp.focus();
+}
+
+function quitarOtro(tipo, valor){
+  var key = tipo === 'offer' ? 'offers' : 'demands';
+  var idx = estado.temp[key].indexOf(valor);
+  if(idx >= 0) estado.temp[key].splice(idx, 1);
+  renderOtrosTags(tipo);
+  var containerId = tipo === 'offer' ? 'chips-offer' : 'chips-demand';
+  renderChipGroup(containerId, tipo, estado.temp[key]);
+  actualizarContadores();
+}
+
+function renderOtrosTags(tipo){
+  var key = tipo === 'offer' ? 'offers' : 'demands';
+  var cls = tipo === 'offer' ? 'offer-tag' : 'demand-tag';
+  var c = document.getElementById('otros-tags-'+tipo);
+  var libres = estado.temp[key].filter(function(s){ return OPCIONES.indexOf(s) < 0; });
+  var h = '';
+  libres.forEach(function(s){
+    h += '<span class="otros-tag '+cls+'">'+esc(s)+
+         ' <button class="otros-tag-x" onclick="quitarOtro(\''+tipo+'\',\''+esc(s)+'\')">✕</button></span>';
+  });
+  c.innerHTML = h;
 }
 
 function actualizarContadores(){
@@ -530,9 +692,17 @@ function cargarDatosYRenderizar(){
   fetch(SCRIPT_URL + '?action=leer')
     .then(function(r){ return r.json(); })
     .then(function(data){
-      // data es un objeto { id: {offers:[], demands:[]}, ... }
+      // data es un objeto { id: {nombre, offers:[], demands:[]}, ... }
       Object.keys(data).forEach(function(id){
-        estado.cargado[id] = data[id];
+        estado.cargado[id] = { offers: data[id].offers, demands: data[id].demands };
+        // Si esta organización no está en la lista local PS (la agregó alguien
+        // desde otro dispositivo), la sumamos para poder mostrarla en el mapa
+        var yaExiste = PS.some(function(p){ return p.id === id; });
+        if(!yaExiste){
+          var color = PALETA_NUEVOS[PS.length % PALETA_NUEVOS.length];
+          var nombre = data[id].nombre || id;
+          PS.push({ id:id, name:nombre, role:'Participante', init:iniciales(nombre), bg:color.bg, col:color.col });
+        }
       });
       setSyncStatus('ok', 'Actualizado · ' + new Date().toLocaleTimeString('es-AR'));
       renderMapa();
@@ -572,6 +742,7 @@ function renderGrilla(){
          '<div class="p-name">'+p.name+'</div>'+
          '<div class="p-role">'+p.role+'</div></div>';
   });
+  h += '<div class="p-card-add" onclick="toggleAddOrg(true)"><span class="plus-icon">+</span><span style="font-size:12px;font-weight:600;">Agregar organización</span></div>';
   document.getElementById('p-grid').innerHTML = h;
   renderProg();
 }
