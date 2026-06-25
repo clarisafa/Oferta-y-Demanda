@@ -874,12 +874,6 @@ function guardar(){
    CARGAR DATOS DESDE GOOGLE SHEETS
 ══════════════════════════════════════════ */
 function cargarDatosYRenderizar(){
-  if(!SCRIPT_URL || SCRIPT_URL === 'TU_URL_AQUI'){
-    setSyncStatus('loading', 'Conectando con JSONBin…');
-    renderMapa();
-    return;
-  }
-
   setSyncStatus('loading', 'Actualizando datos…');
 
   fetch(SCRIPT_URL + '?action=leer')
